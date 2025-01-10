@@ -1,7 +1,7 @@
 mod linalg;
 
 use itertools::Itertools;
-use ndarray::{Array1, Array2, Axis};
+use ndarray::{Array, Array1, Array2, Axis};
 use ndarray_stats::QuantileExt;
 use numpy::{IntoPyArray, PyArray1};
 use pyo3::prelude::*;
@@ -72,28 +72,7 @@ fn distance_matrix(
 
     let mut dm = vec![0.0; num_rows_p * num_rows_q];
     cdist_seuclidean(&p_flat, &q_flat, &mut dm, num_rows_q, num_cols);
-
-    // let dm_2d = ndarray::Array::from_shape_vec((num_rows_p, num_rows_q), dm);
-    // Convert the flat distance matrix into a 2D vector for easier Python use
-    // vec![vec![0.0]]
-    // let mut result = vec![vec![0.0; num_rows_q]; num_rows_p];
-    // for i in 0..num_rows_p {
-    //     for j in 0..num_rows_q {
-    //         result[i][j] = dm[i * num_rows_q + j];
-    //     }
-    // }
-
     Ok(dm.into_pyarray(py))
-}
-
-#[pyfunction]
-fn identity<'py>(py: Python<'py>, arr: Vec<f32>) -> PyResult<Bound<PyArray1<f32>>> {
-    let len = arr.len();
-    let mut arr2: Vec<f32> = vec![0.0; len];
-    for i in 0..len {
-        arr2[i] = arr[i];
-    }
-    Ok(arr2.into_pyarray(py))
 }
 
 /// Python wrapper for the `som` function
@@ -129,12 +108,47 @@ fn generate_grid(dims: Vec<usize>) -> Vec<Vec<usize>> {
         .collect()
 }
 
-/// A Python module implemented in Rust.
+// #[pyclass]
+// struct SOM {
+//     units: Array2<f64>,
+// }
+
+// #[pymethods]
+// impl SOM {
+//     #[new]
+//     fn new(units: Vec<Vec<f64>>) -> Self {
+//         let units = Array2::from_shape_vec((units.len(), units[0].len()), units.into_iter().flatten().collect()).unwrap();
+//         SOM{units}
+//     }
+
+//     fn units(&self) -> PyResult<>
+
+    
+// }
+
 #[pymodule]
-fn rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(generate_grid, m)?)?;
-    m.add_function(wrap_pyfunction!(som_wrapper, m)?)?;
-    m.add_function(wrap_pyfunction!(distance_matrix, m)?)?;
-    m.add_function(wrap_pyfunction!(identity, m)?)?;
-    Ok(())
+mod rust {
+    use super::*;
+
+    #[pymodule_export]
+    use super::som_wrapper;
+
+    #[pymodule_export]
+    use super::distance_matrix;
+
+    #[pymodule_export]
+    use super::generate_grid;
+
+    // #[pymodule_export]
+    // use super::SOM;
+
+    #[pyfunction]
+    fn identity<'py>(py: Python<'py>, arr: Vec<f32>) -> PyResult<Bound<PyArray1<f32>>> {
+        let len = arr.len();
+        let mut arr2: Vec<f32> = vec![0.0; len];
+        for i in 0..len {
+            arr2[i] = arr[i];
+        }
+        Ok(arr2.into_pyarray(py))
+    }
 }
