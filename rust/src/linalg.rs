@@ -1,5 +1,6 @@
+use ndarray::{Array, Array2, Axis};
 use rayon::prelude::*;
-use ndarray::{Array, Array2};
+use rand::prelude::*;
 
 /// Computes the pairwise distance matrix between two sets of points p and q using broadcasting.
 pub fn compute_distance_matrix(p: &Array2<f64>, q: &Array2<f64>) -> Array2<f64> {
@@ -7,7 +8,6 @@ pub fn compute_distance_matrix(p: &Array2<f64>, q: &Array2<f64>) -> Array2<f64> 
     let (n_q, d_q) = q.dim();
 
     assert_eq!(d_p, d_q, "Points in p and q must have the same dimension.");
-
 
     // Flatten the input arrays into vectors for cdist_seuclidean
     let p_flat: Vec<f64> = p.iter().cloned().collect();
@@ -49,13 +49,28 @@ pub fn cdist_seuclidean(
 
 #[inline(always)]
 fn seuclidean_distance(u: &[f64], v: &[f64]) -> f64 {
-    // We compute the sum of squared differences
-    u.iter()
-        .zip(v.iter())
-        .map(|(u_val, v_val)| {
-            let d = u_val - v_val;
-            d * d
-        })
-        .sum::<f64>()
-        .sqrt()
+    let mut sum = 0.0;
+    let len = u.len();
+
+    for i in 0..len {
+        let diff = u[i] - v[i];
+        sum += diff * diff;
+    }
+    
+    sum.sqrt()
+}
+
+pub fn sample_rows<T>(arr: &Array2<T>, n: usize) -> Array2<T>
+where
+    T: Clone,
+{
+    // Get the number of rows in the array
+    let num_rows = arr.nrows();
+
+    // Generate a random slice of indices, without replacement
+    let mut rng = rand::thread_rng();
+    let selected_indices: Vec<usize> = (0..num_rows).choose_multiple(&mut rng, n);
+
+    // Select rows based on the chosen indices
+    arr.select(Axis(0), &selected_indices)
 }
