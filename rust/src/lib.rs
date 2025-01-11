@@ -3,7 +3,7 @@ mod linalg;
 use itertools::Itertools;
 use ndarray::{Array, Array1, Array2, Axis};
 use ndarray_stats::QuantileExt;
-use numpy::{IntoPyArray, PyArray1};
+use numpy::{IntoPyArray, PyArray1, PyArray2};
 use pyo3::prelude::*;
 use rayon::prelude::*;
 use std::f64::consts::E;
@@ -83,7 +83,8 @@ fn som_wrapper(
     units: Vec<Vec<f64>>,
     epochs: usize,
     sigma_initial: f64,
-) -> Vec<Vec<f64>> {
+    py: Python,
+) -> PyResult<Bound<PyArray2<f64>>> {
     let x_array =
         Array2::from_shape_vec((x.len(), x[0].len()), x.into_iter().flatten().collect()).unwrap();
     let units_array = Array2::from_shape_vec(
@@ -92,11 +93,7 @@ fn som_wrapper(
     )
     .unwrap();
     let result = som(&x_array, &units_array, epochs, sigma_initial);
-    // PyArray2::from_array(py, &result)
-    result
-        .axis_iter(Axis(0)) // Iterate over rows (each row is a 1D array)
-        .map(|row| row.to_vec()) // Convert each row to Vec<f64>
-        .collect::<Vec<_>>() // Collect the Vec<f64> into a Vec
+    Ok(result.into_pyarray(py))
 }
 
 #[pyfunction]
