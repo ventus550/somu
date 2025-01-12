@@ -1,7 +1,11 @@
 [package]
 name = "somu"
-version = "0.1.0"
 edition = "2021"
+version = "0.2.0"
+license-file = "LICENSE"
+description = "A simple high-performance implementation of the Self-Organizing Map (SOM) algorithm in Rust, exposed as a Python module."
+readme = "README.md"
+repository = "https://github.com/ventus550/somu"
 
 # See more keys and their definitions at https://doc.somu-lang.org/cargo/reference/manifest.html
 [lib]

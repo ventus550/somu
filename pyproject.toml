@@ -5,6 +5,7 @@ build-backend = "maturin"
 [project]
 name = "somu"
 version = "0.2.0"
+license = {file = "LICENSE"}
 description = "A simple high-performance implementation of the Self-Organizing Map (SOM) algorithm in Rust, exposed as a Python module."
 readme = "README.md"
 authors = [{name = "Jakub Skalski", email = "jakub.skalski.cs@com>"}]
