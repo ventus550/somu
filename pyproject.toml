@@ -4,12 +4,17 @@ build-backend = "maturin"
 
 [project]
 name = "somu"
+version = "0.2.0"
+description = "A simple high-performance implementation of the Self-Organizing Map (SOM) algorithm in Rust, exposed as a Python module."
+long_description = "file:README.md"
+long_description_content_type = "text/markdown"
+authors = [{name = "Jakub Skalski", email = "jakub.skalski.cs@com>"}]
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dynamic = ["version"]
+
 [tool.maturin]
 features = ["pyo3/extension-module"]
