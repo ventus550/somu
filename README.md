@@ -16,7 +16,7 @@ pip install somu
 ```
 
 # Usage
-```
+```python
 from somu import som
 from numpy import random
 
