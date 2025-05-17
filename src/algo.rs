@@ -1,59 +1,42 @@
-use ndarray::{Array1, Array2, Axis};
-use ndarray_stats::QuantileExt;
-use rayon::prelude::*;
+use arrayfire::*;
 
-use crate::linalg::{compute_distance_matrix, sample_rows};
-use std::f64::consts::E;
+use crate::utils::sample_rows;
 
-pub fn organize(
-    x: &Array2<f64>,
-    unit_dst: &Array2<f64>,
-    dst: &Array2<f64>,
-    m: usize,
-    sigma: f64,
-) -> Array2<f64> {
-    let (n, d) = x.dim();
+pub fn compute_distance_matrix(p: &Array<f32>, q: &Array<f32>) -> Array<f32> {
+    let (p_rows, q_rows, feat_dim) = (p.dims()[0], q.dims()[0], p.dims()[1]);
 
-    // Find best matching units (BMUs) for each input
-    let bmu: Vec<usize> = dst.outer_iter().map(|row| row.argmin().unwrap()).collect();
-
-    // Compute neighborhood influence for all neurons (a function of distance)
-    let influence = unit_dst
-        .mapv(|dist| (-dist.powi(2) / (2.0 * sigma.powi(2))))
-        .exp();
-
-    // Parallel computation for the batch updates
-    let (numerator, denominator) = (0..n)
-        .into_par_iter()
-        .map(|i| {
-            let influence_row = influence.row(bmu[i]);
-            let update = &influence_row.insert_axis(Axis(1)) * &x.row(i); // Shape (m, d)
-            (update, influence_row.to_owned())
-        })
-        .reduce(
-            || (Array2::zeros((m, d)), Array1::zeros(m)),
-            |(num1, den1), (num2, den2)| (num1 + num2, den1 + den2),
-        );
-
-    // Update centroid positions
-    &numerator / &(denominator + f64::EPSILON).insert_axis(Axis(1))
+    let p_exp = tile(&moddims(p, dim4!(p_rows, 1, feat_dim)), dim4!(1, q_rows, 1));
+    let q_exp = tile(&moddims(q, dim4!(1, q_rows, feat_dim)), dim4!(p_rows, 1, 1));
+    let diff = p_exp - q_exp;
+    sqrt(&sum(&(&diff * &diff), 2))
 }
 
-/// Self-Organizing Map (SOM) implementation.
-pub fn som_functional(x: &Array2<f64>, units: &Array2<f64>, epochs: usize, sigma_initial: f64) -> Array2<f64> {
-	let m = units.nrows();
+// Organize the data by updating the centroids based on Best Matching Units (BMUs)
+pub fn organize(x: &Array<f32>, influence: &Array<f32>, dst: &Array<f32>) -> Array<f32> {
+    let (_, bmu_indices) = imin(&dst, 1);
+    let influence_rows = lookup(&influence, &bmu_indices, 0);
+    let centroids = matmul(&influence_rows, &x, MatProp::TRANS, MatProp::NONE);
 
-    // Initialize weights randomly from the input data
-    let mut centroids = sample_rows(x, m);
+    let mut normalizer = sum(&influence_rows, 0) + 1e-8;
+    normalizer = transpose(&normalizer, false);
+    normalizer = tile(&normalizer, dim4!(1, centroids.dims()[1], 1, 1));
+    centroids / normalizer.cast::<f32>()
+}
 
-    // Precompute distances between units
+pub fn self_organizing_map(
+    x: &Array<f32>,
+    units: &Array<f32>,
+    epochs: usize,
+    sigma_initial: f32,
+) -> Array<f32> {
+    let mut centroids = sample_rows(x, units.dims()[0] as usize);
     let unit_dst = compute_distance_matrix(units, units);
 
-    // Training loop
-    for e in 0..epochs {
-        let sigma = sigma_initial * E.powf(-(e as f64) / (epochs as f64));
-		let dst = compute_distance_matrix(&x, &centroids);
-		centroids = organize(&x, &unit_dst, &dst, m, sigma)
+    for epoch in 0..epochs {
+        let sigma = sigma_initial * (-(epoch as f32) / epochs as f32).exp();
+        let influence = exp(&(&unit_dst * &unit_dst / (-2.0 * sigma * sigma)));
+        let dst = compute_distance_matrix(&x, &centroids);
+        centroids = organize(&x, &influence, &dst);
     }
     centroids
 }

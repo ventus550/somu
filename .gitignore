@@ -16,6 +16,8 @@ private/*
 .Python
 private/
 .venv/
+.env
+.env/
 env/
 bin/
 build/

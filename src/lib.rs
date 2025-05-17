@@ -1,174 +1,78 @@
 mod algo;
-mod linalg;
 mod utils;
 
-use ndarray::{Array2, Axis};
-use numpy::{IntoPyArray, PyArray1, PyArray2, ToPyArray};
+use core::panic;
+
+use arrayfire::*;
+use numpy::{PyArray2, PyArrayMethods};
 use pyo3::prelude::*;
-use std::f64::consts::E;
+use pyo3::PyObject;
+use rand::Rng;
 
-use crate::algo::{organize, som_functional};
-use crate::linalg::{cdist_seuclidean, compute_distance_matrix, sample_rows};
-use crate::utils::{array2, generate_grid};
+use crate::algo::self_organizing_map;
+use crate::utils::{array2d, configure_backend, generate_grid};
 
 #[pyfunction]
-fn distance_matrix(p: Vec<Vec<f64>>, q: Vec<Vec<f64>>, py: Python) -> Bound<PyArray1<f64>> {
-    let num_rows_p = p.len();
-    let num_cols = p[0].len();
-    let num_rows_q = q.len();
-
-    // Flatten p and q for the calculation
-    let p_flat: Vec<f64> = p.iter().flat_map(|v| v.clone()).collect();
-    let q_flat: Vec<f64> = q.iter().flat_map(|v| v.clone()).collect();
-
-    let mut dm = vec![0.0; num_rows_p * num_rows_q];
-    cdist_seuclidean(&p_flat, &q_flat, &mut dm, num_rows_q, num_cols);
-    dm.into_pyarray(py)
-}
-
-/// Functional self-organizing map
-#[pyfunction]
+#[pyo3(signature = (data, units, epochs=1, sigma_initial=1.0, device=None, seed=None))]
 fn som(
-    x: Vec<Vec<f64>>,
-    units: Vec<Vec<f64>>,
+    data: Vec<Vec<f32>>,
+    // units: Vec<Vec<f32>>,
+    units: PyObject,
     epochs: usize,
-    sigma_initial: f64,
+    sigma_initial: f32,
+    device: Option<String>,
+    seed: Option<u64>,
     py: Python,
-) -> Bound<PyArray2<f64>> {
-    som_functional(&array2(x), &array2(units), epochs, sigma_initial).into_pyarray(py)
-}
-#[pyclass]
-#[derive(Clone)]
-/// Self-Organizing Map (SOM) class.
-/// 
-/// A Self-Organizing Map (SOM) is an unsupervised learning algorithm that maps high-dimensional data to a lower-dimensional grid, preserving topological properties. This implementation includes the ability to train the SOM on input data and obtain a grid of units and quantization errors.
-struct SOM {
-    /// Distance matrix between the most recent input data and the current centroids.
-    dst: Array2<f64>,
-    /// The grid of units in the SOM.
-    units: Array2<f64>,
-    /// Centroids (weights) for each unit on the grid.
-    centroids: Option<Array2<f64>>,
-}
+) -> Bound<PyArray2<f32>> {
+    configure_backend(device.as_deref());
 
-#[pymethods]
-impl SOM {
-    /// Creates a new instance of the SOM with specified unit grid dimensions.
-    /// 
-    /// # Arguments
-    /// * `dims` - A vector specifying the dimensions of the grid (rows and columns).
-    ///
-    /// # Returns
-    /// A new instance of the SOM class.
-    #[new]
-    fn new(dims: Vec<usize>) -> Self {
-        SOM {
-            dst: array2(vec![vec![-1.0]]),
-            units: array2(generate_grid(dims)),
-            centroids: None,
-        }
-    }
+    set_seed(seed.unwrap_or_else(|| rand::thread_rng().gen::<u64>()));
 
-    /// Getter for the `units` field.
-    /// 
-    /// # Arguments
-    /// * `py` - Python interpreter context.
-    ///
-    /// # Returns
-    /// A Python array representing the units (grid) of the SOM.
-    #[getter]
-    fn units(&self, py: Python) -> Py<PyArray2<f64>> {
-        self.units.to_pyarray(py).into()
-    }
+    let units_array = if let Ok(dims) = units.extract::<Vec<usize>>(py) {
+        generate_grid(dims)
+    } else if let Ok(unit_data) = units.extract::<Vec<Vec<f32>>>(py) {
+        array2d(unit_data)
+    } else {
+        panic!("Units must be either a vector of dimensions or a 2D vector of unit weights");
+    };
 
-    /// Getter for the `centroids` field.
-    /// 
-    /// # Arguments
-    /// * `py` - Python interpreter context.
-    ///
-    /// # Returns
-    /// A Python array representing the centroids (weights) of the SOM.
-    #[getter]
-    fn centroids(&self, py: Python) -> Py<PyArray2<f64>> {
-        self.centroids.as_ref().unwrap().to_pyarray(py).into()
-    }
+    let result_af = self_organizing_map(&array2d(data), &units_array, epochs, sigma_initial);
 
-    /// Computes and returns the quantization error of the SOM.
-    /// 
-    /// # Returns
-    /// The quantization error, which is the sum of the smallest distances between each input and its closest centroid.
-    #[getter]
-    fn quantization(&self) -> f64 {
-        self.dst
-            .axis_iter(Axis(0))
-            .map(|row| row.iter().cloned().fold(f64::INFINITY, f64::min))
-            .sum::<f64>()
-            / self.dst.len() as f64
-    }
+    let mut host_data: Vec<f32> = vec![f32::default(); result_af.elements() as usize];
+    result_af.host(&mut host_data);
 
+    let stacked_vec = host_data
+        .chunks_exact(result_af.dims()[0] as usize)
+        .map(|chunk| chunk.to_vec())
+        .collect::<Vec<_>>();
 
-    /// Trains the Self-Organizing Map on the provided data.
-    ///
-    /// # Arguments
-    /// * `x` - A vector of input data, where each element is a feature vector.
-    /// * `sigma_initial` - The initial value of the neighborhood radius.
-    /// * `epochs` - The number of training epochs.
-    /// * `verbose` - A boolean flag to enable/disable verbose output during training.
-    ///
-    /// # Returns
-    /// The trained SOM instance.
-    #[pyo3(signature = (x, sigma_initial=1.0, epochs=1, verbose=true))]
-    fn fit(&mut self, x: Vec<Vec<f64>>, sigma_initial: f64, epochs: usize, verbose: bool) -> Self {
-        let (m, _) = self.units.dim();
-        let x = array2(x);
-
-        // Initialize weights randomly from the input data
-        self.centroids = Some(sample_rows(&x, m));
-
-        // Precompute distances between units
-        let unit_dst = compute_distance_matrix(&self.units, &self.units);
-
-        // Training loop
-        for e in 0..epochs {
-            let sigma = sigma_initial * E.powf(-(e as f64) / (epochs as f64));
-
-            // Compute distances between inputs and centroids once per epoch
-            self.dst = compute_distance_matrix(&x, &self.centroids.as_ref().unwrap());
-            if verbose && e % ((epochs as f64 / 100.0) + 1.0) as usize == 0 {
-                println!(
-                    "Epoch {e:>8}/{epochs:<20} Quantization: {error}",
-                    e = e,
-                    epochs = epochs,
-                    error = self.quantization()
-                )
-            }
-
-            self.centroids = Some(organize(&x, &unit_dst, &self.dst, m, sigma))
-        }
-
-        self.clone()
-    }
-
-    /// Custom string representation of the SOM instance.
-    ///
-    /// # Returns
-    /// A string representation of the SOM, including the number of units and the quantization error.
-    fn __repr__(&self) -> String {
-        format!(
-            "SOM(units={units}, quantization={quant})",
-            units=self.units.nrows(), quant=self.quantization()
-        )
-    }
+    PyArray2::from_vec2(py, &stacked_vec)
+        .expect("Failed to create PyArray2")
+        .transpose()
+        .expect("Failed to transpose PyArray2")
 }
 
 #[pymodule]
 mod somu {
     #[pymodule_export]
     use super::som;
+}
 
-    #[pymodule_export]
-    use super::distance_matrix;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    #[pymodule_export]
-    use super::SOM;
+    #[test]
+    fn test_main() {
+        let data = randn::<f32>(dim4!(100, 2));
+        let grid = generate_grid(vec![3, 3, 3]);
+        self_organizing_map(&data, &grid, 10, 1.0);
+    }
+
+    #[test]
+    fn test_convert() {
+        let data = vec![vec![1.0, 2.0], vec![3.0, 4.0], vec![5.0, 6.0]];
+        let af_array = array2d(data);
+        assert_eq!(af_array.dims(), dim4!(3, 2, 1, 1));
+    }
 }

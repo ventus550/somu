@@ -1,7 +1,7 @@
 # self-organizing-map
 A high-performance implementation of the Self-Organizing Map (SOM) algorithm in Rust, exposed as a Python module. 
 
-![image](demos/sphere.png)
+![image](https://raw.githubusercontent.com/ventus550/somu/refs/heads/master/demos/sphere.png)
 
 Shield: [![CC BY-NC 4.0][cc-by-nc-shield]][cc-by-nc]
 
