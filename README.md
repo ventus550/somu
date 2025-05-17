@@ -16,7 +16,13 @@ pip install somu
 ```
 
 # Usage
+```
+from somu import som
+from numpy import random
 
+data = random.rand(1000, 2)
+som(data, (10, 10))
+```
 
 Shield: [![CC BY-NC 4.0][cc-by-nc-shield]][cc-by-nc]
 
