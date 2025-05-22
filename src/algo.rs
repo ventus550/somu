@@ -26,17 +26,19 @@ pub fn organize(x: &Array<f32>, influence: &Array<f32>, dst: &Array<f32>) -> Arr
 pub fn self_organizing_map(
     x: &Array<f32>,
     units: &Array<f32>,
-    epochs: usize,
+    iters: usize,
     sigma_initial: f32,
+    batch_size: usize,
 ) -> Array<f32> {
     let mut centroids = sample_rows(x, units.dims()[0] as usize);
     let unit_dst = compute_distance_matrix(units, units);
 
-    for epoch in 0..epochs {
-        let sigma = sigma_initial * (-(epoch as f32) / epochs as f32).exp();
+    for i in 0..iters {
+        let sigma = sigma_initial * (-(i as f32) / iters as f32).exp();
         let influence = exp(&(&unit_dst * &unit_dst / (-2.0 * sigma * sigma)));
-        let dst = compute_distance_matrix(&x, &centroids);
-        centroids = organize(&x, &influence, &dst);
+        let batch = sample_rows(x, batch_size);
+        let dst = compute_distance_matrix(&batch, &centroids);
+        centroids = organize(&batch, &influence, &dst);
     }
     centroids
 }

@@ -16,6 +16,7 @@ private/*
 .Python
 private/
 .venv/
+.tvenv/
 .env
 .env/
 env/

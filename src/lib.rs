@@ -13,13 +13,13 @@ use crate::algo::self_organizing_map;
 use crate::utils::{array2d, configure_backend, generate_grid};
 
 #[pyfunction]
-#[pyo3(signature = (data, units, epochs=1, sigma_initial=1.0, device=None, seed=None))]
+#[pyo3(signature = (data, units, iters=1, sigma_initial=1.0, batch_size=1, device=None, seed=None))]
 fn som(
     data: Vec<Vec<f32>>,
-    // units: Vec<Vec<f32>>,
     units: PyObject,
-    epochs: usize,
+    iters: usize,
     sigma_initial: f32,
+    batch_size: usize,
     device: Option<String>,
     seed: Option<u64>,
     py: Python,
@@ -36,7 +36,13 @@ fn som(
         panic!("Units must be either a vector of dimensions or a 2D vector of unit weights");
     };
 
-    let result_af = self_organizing_map(&array2d(data), &units_array, epochs, sigma_initial);
+    let result_af = self_organizing_map(
+        &array2d(data),
+        &units_array,
+        iters,
+        sigma_initial,
+        batch_size,
+    );
 
     let mut host_data: Vec<f32> = vec![f32::default(); result_af.elements() as usize];
     result_af.host(&mut host_data);
@@ -66,7 +72,8 @@ mod tests {
     fn test_main() {
         let data = randn::<f32>(dim4!(100, 2));
         let grid = generate_grid(vec![3, 3, 3]);
-        self_organizing_map(&data, &grid, 10, 1.0);
+        self_organizing_map(&data, &grid, 10, 1.0, 1);
+        self_organizing_map(&data, &grid, 10, 1.0, 100);
     }
 
     #[test]
