@@ -10,7 +10,7 @@ To ensure proper functionality, make sure the ArrayFire shared libraries are dis
 export LD_LIBRARY_PATH=/path/to/arrayfire/lib64:$LD_LIBRARY_PATH
 ```
 
-To install the latest version of the package from PyPI, simply run:
+Then to install the latest version of the package from PyPI, simply run:
 ```
 pip install somu
 ```
@@ -22,6 +22,12 @@ from numpy import random
 
 data = random.rand(1000, 2)
 som(data, (10, 10))
+```
+
+# Demo requirements
+Before running the demos make sure to have the required packages installed:
+```
+pip install -r demos/requirements.txt
 ```
 
 Shield: [![CC BY-NC 4.0][cc-by-nc-shield]][cc-by-nc]
