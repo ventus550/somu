@@ -3,6 +3,27 @@ A high-performance implementation of the Self-Organizing Map (SOM) algorithm in 
 
 ![image](https://raw.githubusercontent.com/ventus550/somu/refs/heads/master/demos/sphere.png)
 
+# Installtion
+This module interfaces with the [ArrayFire](https://arrayfire.org/docs/installing.htm#gsc.tab=0) library (version 3.8.0).
+To ensure proper functionality, make sure the ArrayFire shared libraries are discoverable by the system. You can do this by updating your LD_LIBRARY_PATH environment variable:
+```
+export LD_LIBRARY_PATH=/path/to/arrayfire/lib64:$LD_LIBRARY_PATH
+```
+
+To install the latest version of the package from PyPI, simply run:
+```
+pip install somu
+```
+
+# Usage
+```python
+from somu import som
+from numpy import random
+
+data = random.rand(1000, 2)
+som(data, (10, 10))
+```
+
 Shield: [![CC BY-NC 4.0][cc-by-nc-shield]][cc-by-nc]
 
 This work is licensed under a
